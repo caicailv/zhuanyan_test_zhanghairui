@@ -1,27 +1,26 @@
 import style from './index.module.scss'
-import React, {
+import {
   useState,
   useRef,
   useEffect,
   useContext,
   useCallback,
+  createContext,
 } from 'react'
 import {
   Button,
   Table,
   Input,
-  Select,
   Form,
   FormInstance,
 } from '@arco-design/web-react'
-import { getTableData } from '../../store'
+import { IconPlus } from '@arco-design/web-react/icon'
+import { getTableData, StateContext } from '../../store'
+
 const FormItem = Form.Item
-const EditableContext = React.createContext<{ getForm?: () => FormInstance }>(
-  {}
-)
+const EditableContext = createContext<{ getForm?: () => FormInstance }>({})
 
 const EditableRow = ({ children, record, className, ...rest }: any) => {
-  // const { children, record, className, ...rest } = props
   const refForm = useRef<FormInstance>(null)
 
   const getForm = () => refForm.current as FormInstance
@@ -49,12 +48,11 @@ const EditableCell = (props: any) => {
   const ref = useRef(null)
   const refInput = useRef(null)
   const { getForm } = useContext(EditableContext)
-  // const [editing2, setEditing] = useState(editing||false)
-  const cellValueChangeHandler = (value: string) => {
+  const cellValueChangeHandler = () => {
     const form = getForm!()
     form.validate([column.dataIndex], (errors, values) => {
       if (!errors || !errors[column.dataIndex]) {
-        onHandleSave && onHandleSave({ ...rowData, ...values })
+        onHandleSave && { ...rowData, ...values }
       }
     })
   }
@@ -70,7 +68,11 @@ const EditableCell = (props: any) => {
           field={column.title}
           rules={[{ required: true }]}
         >
-          <Input ref={refInput} onPressEnter={cellValueChangeHandler} />
+          <Input
+            ref={refInput}
+            onBlur={cellValueChangeHandler}
+            placeholder={`请输入${column.title}`}
+          />
         </FormItem>
       </div>
     )
@@ -82,11 +84,15 @@ const EditableCell = (props: any) => {
     </div>
   )
 }
-
 const TableContent = () => {
-  const tableData = getTableData().map((x) => ({ ...x, editing: false }))
+  const { activeMenuKey, activePageKey } = useContext(StateContext)
+  const tableData = getTableData(activeMenuKey, activePageKey).map((x) => ({
+    ...x,
+    editing: false,
+  }))
   const [count, setCount] = useState(tableData.length)
   const [data, setData] = useState(tableData)
+  const { getForm } = useContext(EditableContext)
   const [editKey, setEditKey] = useState('')
   const columns = [
     {
@@ -118,9 +124,8 @@ const TableContent = () => {
       dataIndex: 'preTaskCode',
       editable: true,
     },
-
     {
-      title: 'Operation',
+      title: '操作',
       dataIndex: 'op',
       width: 200,
       render: (_: any, record: (typeof tableData)[0]) => {
@@ -154,6 +159,7 @@ const TableContent = () => {
   ]
 
   const handleSave = (row: (typeof tableData)[0]) => {
+    console.log('row',row)
     const newData = [...data]
     const index = newData.findIndex((item) => row.key === item.key)
     newData.splice(index, 1, { ...newData[index], ...row })
@@ -172,37 +178,36 @@ const TableContent = () => {
       editing: x.key === record.key,
     }))
     setData(newData)
-    // setData(newData.map((x) => ({ ...x, editing: x.key === record.key })))
   }
   const addRow = () => {
+    if (editKey) return
+    let last = {
+      index: count + 1,
+      taskCode: '',
+      role: '',
+      taskName: '',
+      taskContent: '',
+      preTaskCode: '',
+      key: `${count + 1}`,
+      editing: true,
+    }
     setCount(count + 1)
-    setData(
-      data.concat({
-        index: count + 1,
-        taskCode: 'T002',
-        role: 'Developer',
-        taskName: 'Implement authentication',
-        taskContent: 'Create authentication system for user logins',
-        preTaskCode: 'T001',
-        key: `${count + 1}`,
-        editing: false,
-      })
-    )
+    setData(data.concat(last))
+    setEditKey(last.key)
   }
 
   return (
     <>
-      <Button style={{ marginBottom: 10 }} type="primary" onClick={addRow}>
-        Add
-      </Button>
       <Table
         data={data}
+        className={style.table}
         components={{
           body: {
             row: EditableRow,
             cell: EditableCell,
           },
         }}
+        pagination={false}
         columns={columns.map((column) =>
           column.editable
             ? {
@@ -214,6 +219,15 @@ const TableContent = () => {
             : column
         )}
       />
+
+      <Button
+        className={style.addbtn}
+        icon={<IconPlus />}
+        type="outline"
+        onClick={addRow}
+      >
+        Add
+      </Button>
     </>
   )
 }
